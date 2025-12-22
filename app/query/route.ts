@@ -1,9 +1,20 @@
 import postgres from 'postgres';
 
-const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
+// 延迟初始化数据库连接，避免在构建时立即连接
+let sql: ReturnType<typeof postgres> | null = null;
+
+function getDb() {
+  if (!sql) {
+    if (!process.env.POSTGRES_URL) {
+      throw new Error('POSTGRES_URL environment variable is not set');
+    }
+    sql = postgres(process.env.POSTGRES_URL, { ssl: 'require' });
+  }
+  return sql;
+}
 
 async function listInvoices() {
-	const data = await sql`
+	const data = await getDb()`
     SELECT invoices.amount, customers.name
     FROM invoices
     JOIN customers ON invoices.customer_id = customers.id

@@ -5,7 +5,18 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import postgres from 'postgres';
 
-const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
+// 延迟初始化数据库连接，避免在构建时立即连接
+let sql: ReturnType<typeof postgres> | null = null;
+
+function getDb() {
+  if (!sql) {
+    if (!process.env.POSTGRES_URL) {
+      throw new Error('POSTGRES_URL environment variable is not set');
+    }
+    sql = postgres(process.env.POSTGRES_URL, { ssl: 'require' });
+  }
+  return sql;
+}
 
 const FormSchema = z.object({
   id: z.string(),
@@ -55,7 +66,7 @@ export async function createInvoice(prevState: State, formData: FormData) {
     const date = new Date().toISOString().split('T')[0];
 
     try {
-        await sql`
+        await getDb()`
             INSERT INTO invoices (customer_id, amount, status, date) 
             VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
         `;
@@ -89,7 +100,7 @@ export async function updateInvoice(id: string, prevState: State, formData: Form
     const amountInCents = amount * 100;
     
     try {
-        await sql`
+        await getDb()`
             UPDATE invoices
             SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
             WHERE id = ${id}
@@ -107,6 +118,6 @@ export async function updateInvoice(id: string, prevState: State, formData: Form
 export async function deleteInvoice(id: string){
 
     // throw new Error('Failed to Delete Invoice');
-    await sql`DELETE FROM invoices WHERE id = ${id}`;
+    await getDb()`DELETE FROM invoices WHERE id = ${id}`;
     revalidatePath('/dashboard/invoices');
 }
